@@ -44,9 +44,11 @@ class ListModel;
 class QSvgRenderer;
 class MonitorProperties;
 
-using namespace Qt3DCore;
 using namespace Qt3DRender;
 using namespace Qt3DLogic;
+
+using Qt3DCore::QEntity;
+using Qt3DCore::QNode;
 
 class GoboTextureImage : public Qt3DRender::QPaintedTextureImage
 {

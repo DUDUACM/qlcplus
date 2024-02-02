@@ -24,6 +24,11 @@
 #include "inputoutputmap.h"
 #include "doc.h"
 
+InputProfileEditor::InputProfileEditor(QObject *parent)
+    : QObject(parent)
+{
+}
+
 InputProfileEditor::InputProfileEditor(QLCInputProfile *profile, Doc *doc,
                                        QObject *parent)
     : QObject(parent)

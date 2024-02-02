@@ -49,6 +49,9 @@
 #include "qlcfixturemode.h"
 #include "monitorproperties.h"
 
+using Qt3DCore::QComponent;
+using Qt3DCore::QGeometry;
+
 //#define SHOW_FRAMEGRAPH
 
 MainView3D::MainView3D(QQuickView *view, Doc *doc, QObject *parent)

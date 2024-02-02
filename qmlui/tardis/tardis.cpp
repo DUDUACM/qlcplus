@@ -19,7 +19,7 @@
 
 #include <QMutexLocker>
 #include <QXmlStreamReader>
-#include <QtCore/qbuffer.h>
+#include <QtCore/QBuffer>
 
 #include "tardis.h"
 

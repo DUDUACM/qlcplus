@@ -592,7 +592,7 @@ QIcon ConsoleChannel::colorIcon(const QString& name)
     index = colorList.indexOf(colname);
     if (index != -1)
     {
-        color.setNamedColor(colname);
+        color = QColor::fromString(colname);
     }
     else
     {
@@ -609,7 +609,7 @@ QIcon ConsoleChannel::colorIcon(const QString& name)
         QRegularExpression regex(re, QRegularExpression::CaseInsensitiveOption);
         index = colorList.indexOf(regex);
         if (index != -1)
-            color.setNamedColor(colorList.at(index));
+            color = QColor::fromString(colorList.at(index));
     }
 
     if (color.isValid() == true)
