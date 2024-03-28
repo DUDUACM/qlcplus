@@ -46,6 +46,10 @@ function connect() {
   websocket.onmessage = function (ev) {
     //console.log(ev.data);
     var msgParams = ev.data.split("|");
+    if (msgParams[0] === "GM_VALUE") {
+      grandMasterValueChanged(msgParams[1], msgParams[2]);
+    }
+
     if (msgParams[1] === "BUTTON") {
       wsSetButtonState(msgParams[0], msgParams[2]);
     } else if (msgParams[1] === "BUTTON_DISABLE") {
@@ -73,6 +77,8 @@ function connect() {
       setFrameDisableState(msgParams[0], msgParams[2]);
     } else if (msgParams[0] === "ALERT") {
       alert(msgParams[1]);
+    } else if (msgParams[1] === "CUE_STEP_NOTE") {
+      setCueStepNote(msgParams[0], msgParams[2], msgParams[3]);
     } else if (msgParams[1] === "CUE_PROGRESS") {
       // CUE message is <ID>|CUE_PERCENT|<PERCENT>|<TEXT>
       setCueProgress(msgParams[0], msgParams[2], msgParams[3]);

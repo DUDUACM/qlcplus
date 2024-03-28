@@ -20,6 +20,7 @@
 #include <QDebug>
 #include <QProcess>
 #include <QSettings>
+#include <qmath.h>
 
 #include "webaccess.h"
 
@@ -48,6 +49,7 @@
 #include "qlcfile.h"
 #include "chaser.h"
 #include "doc.h"
+#include "grandmaster.h"
 
 #include "audiocapture.h"
 #include "audiorenderer.h"
@@ -466,7 +468,7 @@ void WebAccess::slotHandleWebSocketRequest(QHttpConnection *conn, QString data)
 
         if (cmdList.at(1) == "NETWORK")
         {
-            if (m_netConfig->updateNetworkFile(cmdList) == true)
+            if (m_netConfig->updateNetworkSettings(cmdList) == true)
             {
                 QString wsMessage = QString("ALERT|" + tr("Network configuration changed. Reboot to apply the changes."));
                 conn->webSocketWrite(QHttpConnection::TextFrame, wsMessage.toUtf8());
@@ -712,6 +714,12 @@ void WebAccess::slotHandleWebSocketRequest(QHttpConnection *conn, QString data)
 
         return;
     }
+    else if (cmdList[0] == "GM_VALUE")
+    {
+        uchar value = cmdList[1].toInt();
+        m_doc->inputOutputMap()->setGrandMasterValue(value);
+
+    }
     else if (cmdList[0] == "POLL")
         return;
 
@@ -772,7 +780,9 @@ void WebAccess::slotHandleWebSocketRequest(QHttpConnection *conn, QString data)
                 else if (cmdList[1] == "NEXT")
                     cue->slotNextCue();
                 else if (cmdList[1] == "STEP")
-                    cue->playCueAtIndex(cmdList[2].toInt());
+                    cue->slotCurrentStepChanged(cmdList[2].toInt());
+                else if (cmdList[1] == "CUE_STEP_NOTE")
+                    cue->slotStepNoteChanged(cmdList[2].toInt(), cmdList[3]);
                 else if (cmdList[1] == "CUE_SHOWPANEL")
                     cue->slotSideFaderButtonChecked(cmdList[2] == "1" ? false : true);
                 else if (cmdList[1] == "CUE_SIDECHANGE")
@@ -1248,10 +1258,10 @@ QString WebAccess::getSliderHTML(VCSlider *slider)
         if (spotWidth < 6) spotWidth = 6;
 
         str += "<div class=\"pieWrapper\" data=\"" + slID + "\">";
-        str += "<div class=\"pie\" id=\"pie" + slID + "\" style=\"--degValue:0;--color1:"+QString(slider->isDisabled() ? "#c0c0c0" : "lime")+";--pieWidth: "+QString::number(pieWidth)+"px;\">";
-        str += "<div class=\"knobWrapper\" id=\"knobWrapper" + slID + "\" style=\"--knobWrapperWidth: "+QString::number(knobWrapperWidth)+"px;\">";
-        str += "<div class=\"knob\" id=\"knob" + slID + "\" style=\"--knobWidth: "+QString::number(knobWidth)+"px;\">";
-        str += "<div class=\"spot\" id=\"spot" + slID + "\" style=\"--spotWidth: "+QString::number(spotWidth)+"px;\"></div>";
+        str += "<div class=\"pie\" id=\"pie" + slID + "\" style=\"--degValue:0;--color1:" + QString(slider->isDisabled() ? "#c0c0c0" : "lime") + ";--pieWidth: " + QString::number(pieWidth) + "px;\">";
+        str += "<div class=\"knobWrapper\" id=\"knobWrapper" + slID + "\" style=\"--knobWrapperWidth: " + QString::number(knobWrapperWidth) + "px;\">";
+        str += "<div class=\"knob\" id=\"knob" + slID + "\" style=\"--knobWidth: " + QString::number(knobWidth) + "px;\">";
+        str += "<div class=\"spot\" id=\"spot" + slID + "\" style=\"--spotWidth: " + QString::number(spotWidth) + "px;\"></div>";
         str += "</div>\n</div>\n</div>\n</div>\n";
 
         m_JScode += "maxVal[" + slID + "] = " + QString::number(max) + "; \n";
@@ -1356,6 +1366,17 @@ void WebAccess::slotCueIndexChanged(int idx)
         return;
 
     QString wsMessage = QString("%1|CUE|%2").arg(cue->id()).arg(idx);
+
+    sendWebSocketMessage(wsMessage.toUtf8());
+}
+
+void WebAccess::slotCueStepNoteChanged(int idx, QString note)
+{
+    VCCueList *cue = qobject_cast<VCCueList *>(sender());
+    if (cue == NULL)
+        return;
+
+    QString wsMessage = QString("%1|CUE_STEP_NOTE|%2|%3").arg(cue->id()).arg(idx).arg(note);
 
     sendWebSocketMessage(wsMessage.toUtf8());
 }
@@ -1520,8 +1541,8 @@ QString WebAccess::getCueListHTML(VCCueList *cue)
             str += "<div id=\"cueCTP"+QString::number(cue->id())+"\" class=\"vcslLabel" + QString(cue->isDisabled() ? " vcslLabel-disabled" : "") + "\" style=\"top:0px;\">" +
                    cue->topPercentageValue() + "</div>\n";
 
-            str += "<input type=\"range\" class=\"vVertical" + QString(cue->isDisabled() ? " vVertical-disabled" : "") + "\" id=\"cueC"+QString::number(cue->id())+"\" "
-                   "oninput=\"cueCVchange("+QString::number(cue->id())+");\" ontouchmove=\"cueCVchange("+QString::number(cue->id())+");\" "
+            str += "<input type=\"range\" class=\"vVertical" + QString(cue->isDisabled() ? " vVertical-disabled" : "") + "\" id=\"cueC" + QString::number(cue->id()) + "\" "
+                   "oninput=\"cueCVchange(" + QString::number(cue->id()) + ");\" ontouchmove=\"cueCVchange(" + QString::number(cue->id())+");\" "
                    "style=\"width: " + QString::number(cue->height() - 50) + "px; margin-top: " +
                    QString::number(cue->height() - 50) + "px; margin-left: 22px;\" ";
             str += "min=\"0\" max=\"255\" step=\"1\" value=\"" + QString::number(cue->sideFaderValue()) + "\" " + QString(cue->isDisabled() ? "disabled" : "") + " >\n";
@@ -1536,7 +1557,7 @@ QString WebAccess::getCueListHTML(VCCueList *cue)
 
     str += "<div style=\"width: 100%;\"><div style=\"width: 100%; height: " + QString::number(cue->height() - 54) + "px; overflow: scroll;\" >\n";
 
-    str += "<table class=\"hovertable"+QString(cue->isDisabled() ? " cell-disabled" : "")+"\" id=\"cueTable"+QString::number(cue->id())+"\" style=\"width: 100%;\">\n";
+    str += "<table class=\"hovertable" + QString(cue->isDisabled() ? " cell-disabled" : "") + "\" id=\"cueTable" + QString::number(cue->id()) + "\" style=\"width: 100%;\">\n";
     str += "<tr><th>#</th><th>" + tr("Name") + "</th>";
     str += "<th>" + tr("Fade In") + "</th>";
     str += "<th>" + tr("Fade Out") + "</th>";
@@ -1631,7 +1652,11 @@ QString WebAccess::getCueListHTML(VCCueList *cue)
                         str += "<td></td>";
                 }
 
-                str += "<td>" + step->note + "</td>\n";
+                str += "<td ondblclick=\"changeCueNoteToEditMode(" + QString::number(cue->id()) + ", " + QString::number(i) + ");\">" +
+                         "<span id=\"cueNoteSpan" + stepID + "\" style=\"display: block;\">" + step->note + "</span>" +
+                         "<input type=\"text\" id=\"cueNoteInput" + stepID + "\" value=\"" + step->note + "\" style=\"display: none; width: 60px;\" " +
+                         "onfocusout=\"changeCueNoteToTextMode(" + QString::number(cue->id()) + ", " + QString::number(i) + ");\" />"
+                       "</td>\n";
             }
             str += "</td>\n";
         }
@@ -1641,9 +1666,9 @@ QString WebAccess::getCueListHTML(VCCueList *cue)
 
     // progress bar
     str += "<div class=\"vccuelistProgress\">";
-    str += "<div class=\"vccuelistProgressBar\" id=\"vccuelistPB"+QString::number(cue->id())+"\" style=\"width: " +
-           QString::number(cue->progressPercent())+ "%; \"></div>";
-    str += "<div class=\"vccuelistProgressVal\" id=\"vccuelistPV"+QString::number(cue->id())+"\">" +
+    str += "<div class=\"vccuelistProgressBar\" id=\"vccuelistPB" + QString::number(cue->id()) + "\" style=\"width: " +
+           QString::number(cue->progressPercent()) + "%; \"></div>";
+    str += "<div class=\"vccuelistProgressVal\" id=\"vccuelistPV" + QString::number(cue->id())+"\">" +
            QString(cue->progressText()) + "</div>";
     str += "</div>";
 
@@ -1651,7 +1676,7 @@ QString WebAccess::getCueListHTML(VCCueList *cue)
     if (cue->sideFaderMode() != VCCueList::FaderMode::None)
     {
         str += "<div style=\"width: 100%; display: flex; flex-direction: row; align-items: center; justify-content: space-between; \">";
-        str += "<a class=\"vccuelistFadeButton"+QString(cue->isDisabled() ? " vccuelistFadeButton-disabled" : "")+"\" id=\"fade" + QString::number(cue->id()) + "\" ";
+        str += "<a class=\"vccuelistFadeButton"+QString(cue->isDisabled() ? " vccuelistFadeButton-disabled" : "") + "\" id=\"fade" + QString::number(cue->id()) + "\" ";
         str += "href=\"javascript:wsShowCrossfadePanel(" + QString::number(cue->id()) + ");\">\n";
         str += "<img src=\"slider.png\" width=\"27\"></a>\n";
     }
@@ -1715,6 +1740,8 @@ QString WebAccess::getCueListHTML(VCCueList *cue)
 
     connect(cue, SIGNAL(stepChanged(int)),
             this, SLOT(slotCueIndexChanged(int)));
+    connect(cue, SIGNAL(stepNoteChanged(int, QString)),
+            this, SLOT(slotCueStepNoteChanged(int, QString)));
     connect(cue, SIGNAL(progressStateChanged()),
             this, SLOT(slotCueProgressStateChanged()));
     connect(cue, SIGNAL(sideFaderButtonChecked()),
@@ -2081,6 +2108,66 @@ QString WebAccess::getChildrenHTML(VCWidget *frame, int pagesNum, int currentPag
     return unifiedHTML;
 }
 
+void WebAccess::slotGrandMasterValueChanged(uchar value)
+{
+    GrandMaster::ValueMode gmValueMode = m_vc->properties().grandMasterValueMode();
+    QString gmDisplayValue;
+    if (gmValueMode == GrandMaster::Limit)
+    {
+        gmDisplayValue = QString("%1").arg(value, 3, 10, QChar('0'));
+    }
+    else
+    {
+        int p = qFloor(((double(value) / double(UCHAR_MAX)) * double(100)) + 0.5);
+        gmDisplayValue = QString("%1%").arg(p, 2, 10, QChar('0'));
+    }
+    QString wsMessage = QString("GM_VALUE|%1|%2").arg(value).arg(gmDisplayValue);
+    sendWebSocketMessage(wsMessage.toUtf8());
+}
+
+QString WebAccess::getGrandMasterSliderHTML()
+{
+    GrandMaster::ValueMode gmValueMode = m_vc->properties().grandMasterValueMode();
+    GrandMaster::SliderMode gmSliderMode = m_vc->properties().grandMasterSlideMode();
+    uchar gmValue = m_doc->inputOutputMap()->grandMasterValue();
+
+    QString gmDisplayValue;
+    if (gmValueMode == GrandMaster::Limit)
+    {
+        gmDisplayValue = QString("%1").arg(gmValue, 3, 10, QChar('0'));
+    }
+    else
+    {
+        int p = qFloor(((double(gmValue) / double(UCHAR_MAX)) * double(100)) + 0.5);
+        gmDisplayValue = QString("%1%").arg(p, 2, 10, QChar('0'));
+    }
+
+    QString str = "<div class=\"vcslider\" style=\"width: 100%; height: 100%;\">\n";
+    str += "<div style=\"height: 100%; display: flex; flex-direction: column; justify-content: space-between; \">";
+    str += "<div class=\"vcslLabel\" id=\"vcGMSliderLabel\">"+gmDisplayValue+"</div>\n";
+
+    int rotate = gmSliderMode == GrandMaster::SliderMode::Inverted ? 90 : 270;
+    QString mt = gmSliderMode == GrandMaster::SliderMode::Inverted ? "calc(-100vh + 120px)" : "calc(100vh - 120px)";
+    int min = 0;
+    int max = 255;
+
+    str +=  "<input type=\"range\" class=\"vVertical\" id=\"vcGMSlider\" "
+                "oninput=\"grandMasterValueChange();\" ontouchmove=\"grandMasterValueChange();\" "
+                "style=\"width: calc(100vh - 120px); margin-top: " + mt + ";"
+                "margin-left: 20px; "
+                "--rotate: "+QString::number(rotate)+"\" "
+                "min=\""+QString::number(min)+"\" max=\""+QString::number(max)+"\" "
+                "step=\"1\" value=\"" + QString::number(gmValue) + "\">\n";
+    str += "<div class=\"vcslLabel\">GM</div>";
+    str += "</div>\n";
+    str += "</div>\n";
+
+    connect(m_doc->inputOutputMap(), SIGNAL(grandMasterValueChanged(uchar)),
+            this, SLOT(slotGrandMasterValueChanged(uchar)));
+
+    return str;
+}
+
 QString WebAccess::getVCHTML()
 {
     m_CSScode = "<link href=\"common.css\" rel=\"stylesheet\" type=\"text/css\" media=\"screen\">\n";
@@ -2098,7 +2185,7 @@ QString WebAccess::getVCHTML()
 				"<input id=\"submitTrigger\" type=\"submit\"/>\n"
             "</form>\n"
 
-            "<div class=\"controlBar\">\n"
+            "<div class=\"controlBar\" style=\"position: fixed; top: 0; left: 0; z-index: 1;\">\n"
             "<a class=\"button button-blue\" href=\"javascript:document.getElementById('loadTrigger').click();\">\n"
             "<span>" + tr("Load project") + "</span></a>\n"
 
@@ -2107,11 +2194,12 @@ QString WebAccess::getVCHTML()
             "<a class=\"button button-blue\" href=\"/config\"><span>" + tr("Configuration") + "</span></a>\n"
 
             "<div class=\"swInfo\">" + QString(APPNAME) + " " + QString(APPVERSION) + "</div>"
-            "</div>\n"
-            "<div style=\"position: relative; "
+            "</div>\n";
+    widgetsHTML += "<div style=\"height: calc(100vh - 60px); position: fixed; top: 40px; left: 0; width: 40px; background-color: #ccc; z-index: 1;\">"+getGrandMasterSliderHTML()+"</div>";
+    widgetsHTML += "<div style=\"position: relative; "
             "width: " + QString::number(mfSize.width()) +
             "px; height: " + QString::number(mfSize.height()) + "px; "
-            "background-color: " + mainFrame->backgroundColor().name() + ";\">\n";
+            "background-color: " + mainFrame->backgroundColor().name() + "; top: 40px; left: 40px;\">\n";
 
     widgetsHTML += getChildrenHTML(mainFrame, 0, 0);
 

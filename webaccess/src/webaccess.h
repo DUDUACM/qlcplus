@@ -72,6 +72,7 @@ private:
     QString getCueListHTML(VCCueList *cue);
     QString getClockHTML(VCClock *clock);
     QString getMatrixHTML(VCMatrix *matrix);
+    QString getGrandMasterSliderHTML();
 
     QString getChildrenHTML(VCWidget *frame, int pagesNum, int currentPageIdx);
     QString getVCHTML();
@@ -94,6 +95,7 @@ protected slots:
     void slotSliderDisableStateChanged(bool disable);
     void slotAudioTriggersToggled(bool toggle);
     void slotCueIndexChanged(int idx);
+    void slotCueStepNoteChanged(int idx, QString note);
     void slotCueProgressStateChanged();
     void slotCueShowSideFaderPanel();
     void slotCueSideFaderValueChanged();
@@ -108,6 +110,8 @@ protected slots:
     void slotMatrixEndColorChanged();
     void slotMatrixAnimationValueChanged(QString name);
     void slotMatrixControlKnobValueChanged(int controlID, int value);
+
+    void slotGrandMasterValueChanged(uchar value);
 
 protected:
     QString m_JScode;

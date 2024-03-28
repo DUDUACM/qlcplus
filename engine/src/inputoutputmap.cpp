@@ -41,8 +41,6 @@
 #include "qlcfile.h"
 #include "doc.h"
 
-#include "../../plugins/midi/src/common/midiprotocol.h"
-
 InputOutputMap::InputOutputMap(Doc *doc, quint32 universes)
   : QObject(doc)
   , m_blackout(false)
@@ -103,6 +101,9 @@ bool InputOutputMap::setBlackout(bool blackout)
             if (op != NULL)
                 op->setBlackout(blackout);
         }
+
+        const QByteArray postGM = universe->postGMValues()->mid(0, universe->usedChannels());
+        universe->dumpOutput(postGM, true);
     }
 
     emit blackoutChanged(m_blackout);
@@ -750,7 +751,7 @@ QString InputOutputMap::outputPluginStatus(const QString& pluginName, quint32 ou
     }
 }
 
-bool InputOutputMap::sendFeedBack(quint32 universe, quint32 channel, uchar value, const QString& key)
+bool InputOutputMap::sendFeedBack(quint32 universe, quint32 channel, uchar value, const QVariant &params)
 {
     if (universe >= universesCount())
         return false;
@@ -759,7 +760,7 @@ bool InputOutputMap::sendFeedBack(quint32 universe, quint32 channel, uchar value
 
     if (patch != NULL && patch->isPatched())
     {
-        patch->plugin()->sendFeedBack(universe, patch->output(), channel, value, key);
+        patch->plugin()->sendFeedBack(universe, patch->output(), channel, value, params);
         return true;
     }
     else

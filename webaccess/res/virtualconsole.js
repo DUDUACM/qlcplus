@@ -21,6 +21,18 @@ function initVirtualConsole() {
  updateTime();
 }
 
+function grandMasterValueChanged(value, displayValue) {
+ obj = document.getElementById("vcGMSlider");
+ obj.value = value;
+ var labelObj = document.getElementById("vcGMSliderLabel");
+ labelObj.innerHTML = displayValue;
+}
+
+function grandMasterValueChange() {
+ obj = document.getElementById("vcGMSlider");
+ websocket.send("GM_VALUE|" + obj.value);
+}
+
 /* VCButton */
 function buttonPress(id) {
  websocket.send(id + "|255");
@@ -119,6 +131,33 @@ function setCueProgress(id, percent, text) {
  var progressValObj = document.getElementById("vccuelistPV" + id);
  progressBarObj.style.width = percent + "%";
  progressValObj.innerHTML = text;
+}
+
+function changeCueNoteToEditMode(id, idx) {
+ var cueNoteSpanObj = document.getElementById("cueNoteSpan" + id + "_" + idx);
+ var cueNoteInputObj = document.getElementById("cueNoteInput" + id + "_" + idx);
+ cueNoteSpanObj.style.display = "none";
+ cueNoteInputObj.style.display = "block";
+ cueNoteInputObj.focus();
+}
+
+function changeCueNoteToTextMode(id, idx) {
+ var cueNoteSpanObj = document.getElementById("cueNoteSpan" + id + "_" + idx);
+ var cueNoteInputObj = document.getElementById("cueNoteInput" + id + "_" + idx);
+ cueNoteSpanObj.style.display = "block";
+ cueNoteInputObj.style.display = "none";
+ var newNote = cueNoteInputObj.value;
+ cueNoteSpanObj.innerHTML = newNote;
+ websocket.send(id + "|CUE_STEP_NOTE|" + idx + "|" + newNote);
+}
+
+function setCueStepNote(id, idx, note) {
+ var cueNoteSpanObj = document.getElementById("cueNoteSpan" + id + "_" + idx);
+ var cueNoteInputObj = document.getElementById("cueNoteInput" + id + "_" + idx);
+ cueNoteSpanObj.style.display = "block";
+ cueNoteInputObj.style.display = "none";
+ cueNoteSpanObj.innerHTML = note;
+ cueNoteInputObj.value = note;
 }
 
 function showSideFaderPanel(id, checked) {
